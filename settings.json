@@ -1,0 +1,20 @@
+{
+  "input": "synthetic.csv",
+  "analysis_rows": [
+    3,
+    55
+  ],
+  "floating_potential_mode": "minimum",
+  "retarding_fit_rows": [
+    27,
+    39
+  ],
+  "saturation_fit_rows": [
+    51,
+    55
+  ],
+  "probe_radius_m": 0.02,
+  "electron_mass_kg": 9.10939e-31,
+  "boltzmann_J_per_K": 1.38e-23,
+  "electron_charge_C": 1.6e-19
+}

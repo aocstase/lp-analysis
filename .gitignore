@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.py[cod]
+.tools/
+.env
+.env.*
+data/
+profiles/
+outputs/
+results/
+*.xlsx
+*.xls
+*.csv
+!synthetic.csv
+~$*
