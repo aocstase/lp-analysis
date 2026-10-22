@@ -1,0 +1,2 @@
+# lp-analysis
+球状LangmuirプローブのLP512測定データをGUIなしで解析するPythonコード
