@@ -1,0 +1,31 @@
+{
+  "version": "1.1.1",
+  "sources": {
+    "lp_calculation.py": "234c3feb4a4c570243810ff7951bb70c09e4f89a67b073d116954a29f421202a",
+    "manual_analysis.py": "6cb61b4fa1bc05b07a2659f917fdcb665eff40ce76dbdef00d520a7aecf11404",
+    "analyze.py": "4064a0fa9f0bd17bd340734d9791470c28706c89b0c0697a8932ea7d62e0f9d6",
+    "data_catalog.py": "3a5688da16ebeea846ef66ce23968943bbef81249ae711c76f82f34de7ff32fc",
+    "result_output.py": "7671734babc36af56a3b58fba842a40c355098d8fe9a4622e5660ef21f490074",
+    "run_calculation.py": "f93cd9c5a068f83e953dcdd7d138b43a06dd86748d08f9786ebcf7532e84388c",
+    "run_gui.py": "6ab193972abaa7247b65b28f23cd3c5b0029b71bcbfa1ac7c8b4bc17c4896018",
+    "run.cmd": "391e59db73895525eb6827e6d1cda6c93fdaaa488b376c44d7bd75bba6ff82a4",
+    "run_gui.cmd": "07f300e50fcaa27a28566052d4f48171ef48e95f6eca3d8e0748c51e7b0f1eca",
+    "update_app.py": "6b06ac698854222e2225c3ddaff97d1ed06e85c4640997c92514254aa10343b1",
+    "update.cmd": "49df6ca17b8da1f2df7c227bcb819e0628808e0d569e1b65bc7e905ecee59aaa",
+    "README.md": "83cb0dcef1899d5ba32ae7104778eec8bad35756ca27096c7c72bc9c6e1f2dc6",
+    "requirements.txt": "3d20883116cd19db69a6bf3cdaa22e182f5857f7dae386f964d58ed68b479e53",
+    "requirements-gui.txt": "e6e2dfcb6ceb55a4f47bd7d7227393d63fbcbd4a9bbf0ffce22b7464186d9644",
+    ".gitignore": "dc2c132a9f55411292639a8db6ca3fecb7f56d723b31dc709566a97f266846ca",
+    "README_UPDATE.txt": "2667c1304cb897c83ec646b1e997abb97370e80521d4ae22bbb06c96062a3e95",
+    "release_tools.py": "9d7f77cf9b65799815986311ff36c93c618beba317d8835992b191c5feded46d",
+    "auto_publish.py": "55567ea6d755856c2017fe39eaf52a94267d94400eb64fc5e0c487ca67161ea9",
+    "start_auto_publish.cmd": "ce17faa9dbcb5e6d818972ec74c8fc48b64c0a2bfbfad40c87837895888b7ea2",
+    "stop_auto_publish.cmd": "1b8765ea8cd774943a729f57666441e25814f1fed5a8e736ce64f81a457a777c",
+    "test_gui.py": "ad9ed95b7f7d5e3717cf2d7d4999435d5c1d7f5ddbfc9fda140cf1af04713039",
+    "test_lp_calculation.py": "7b49ec908a729f8b6af9fd53af85d716870bf5b1af2032f5599e60831692718c",
+    "test_update.py": "3f5e0955749846858e808ea415215e9afe888e77eb30c218557fcaf5015bcc19",
+    "test_release.py": "e6d8c596e455d7bef628c281c94ee2f3dabb2a9752adcbb79e7f238e77913900",
+    "settings.json": "5367e389b3aa286db3b7fd6d5512614e7b53e5e698ddba4b4f87f4c2180a73a6",
+    "synthetic.csv": "55a0faf319448af6f54e7c1a6f6e00c2364fdbfa63ea5ade71e51def858fa034"
+  }
+}

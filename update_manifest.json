@@ -1,7 +1,7 @@
 {
   "format": 1,
   "app_id": "lp512-analysis",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "python_min": [
     3,
     10
@@ -18,7 +18,7 @@
     "run_gui.cmd": "07f300e50fcaa27a28566052d4f48171ef48e95f6eca3d8e0748c51e7b0f1eca",
     "update_app.py": "6b06ac698854222e2225c3ddaff97d1ed06e85c4640997c92514254aa10343b1",
     "update.cmd": "49df6ca17b8da1f2df7c227bcb819e0628808e0d569e1b65bc7e905ecee59aaa",
-    "README.md": "0d1c208edf729afffe89c432fe21809d6a87248a677672bc2bfeaa99f355582a",
+    "README.md": "83cb0dcef1899d5ba32ae7104778eec8bad35756ca27096c7c72bc9c6e1f2dc6",
     "requirements.txt": "3d20883116cd19db69a6bf3cdaa22e182f5857f7dae386f964d58ed68b479e53",
     "requirements-gui.txt": "e6e2dfcb6ceb55a4f47bd7d7227393d63fbcbd4a9bbf0ffce22b7464186d9644",
     ".gitignore": "dc2c132a9f55411292639a8db6ca3fecb7f56d723b31dc709566a97f266846ca"

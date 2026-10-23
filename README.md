@@ -33,13 +33,21 @@ python update_app.py --archive 最新版.zip --yes
 
 ### 配布する側で次の版を作るとき
 
-コード・説明書を変更した後、配布フォルダで版番号を上げて更新情報を作成します。
+開発PCで自動反映を起動すると、コード・説明書を保存して15秒間変更が止まった後、テスト・版番号の更新・配布ZIP作成・GitHubへの送信を自動で行います。たとえば1.1.0の次は1.1.1になります。同じ内容の保存では版番号を増やしません。
+
+初回だけGit for Windowsを導入し、GitHubへ書き込めるアカウントで認証します。ブラウザで本人が許可し、パスワードやトークンをコードへ書く必要はありません。
 
 ```sh
-python update_app.py --make-manifest 1.1.1
+python auto_publish.py --login
 ```
 
-`update_manifest.json`をプログラムと一緒にGitHubのmainへ反映します。配布ZIPにも同じ更新情報を含めます。ハッシュを作成した後にプログラムや説明書を変更した場合は、もう一度このコマンドを実行してください。依存ライブラリを追加・変更した版では、利用者にも`python -m pip install -r requirements.txt`の実行を案内してください。
+`start_auto_publish.cmd`を起動したまま開発してください。停止は`stop_auto_publish.cmd`です。この開発プロジェクトのVS Codeでは、フォルダを開いたときにも自動配布タスクを起動します。VS Codeから自動タスクの許可を求められた場合は許可してください。監視を閉じている間は送信しません。
+
+配布対象は`release_tools.py`の明示的なファイル一覧だけです。`data`・`profiles`・`outputs`・個人の設定・認証情報は送信しません。配布用の`settings.json`と`synthetic.csv`は人工サンプルの一致を検証します。テストが失敗した変更は公開せず、通信エラーは60秒後に再試行します。状態は`.tools/auto_publish/status.json`に記録します。
+
+一度だけ反映する場合は`python auto_publish.py --once`、GitHubへ送信せず配布ファイルを検証・作成する場合は`python release_tools.py`です。`github_lp_analysis`フォルダがある開発環境では、そこへ配布対象を自動で同期します。手作業でのコピー・採番・ZIP作成は不要です。依存ライブラリを追加・変更した版では、利用者にも`python -m pip install -r requirements.txt`の実行を案内してください。
+
+他のPCでは、開発側の送信完了後に解析GUIの「アップデート」から新版を適用できます。利用者の解析中にプログラムを勝手に置き換えることはありません。自動配布の起動は開発PCだけで必要です。
 
 ## 準備と計算
 
