@@ -13,13 +13,12 @@ import numpy as np
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.widgets import SpanSelector
-from zipfile import BadZipFile
 
 from analyze import analyze, export_analysis
-from calculation import fit_line, intersect_fits, fit_vp_neighbors, normalize_config
-from measurement import ROOT, read_trace
-from floating_potential import minimum_floating_potential
+from lp_calculation import (ROOT, read_trace, fit_line, intersect_fits, fit_vp_neighbors,
+                            normalize_config, minimum_floating_potential)
 from data_catalog import DEFAULT_CONFIGS, data_snapshot, discover_profiles
+from lp_calculation import output_directory, applicability_bounds, select_applicable_rows
 
 COLORS = {'retarding':'#246caf','saturation':'#ce721b','vp':'#398147'}
 REGION_KEYS=('retarding','saturation')
@@ -27,7 +26,8 @@ REGION_KEYS=('retarding','saturation')
 
 def selected_config(base, entries):
     """フォームの明示的な指定だけから設定を作り、選択範囲を自動変更しない。"""
-    config=normalize_config(base)
+    config=normalize_config(base | {key: entries.get(key, base.get(key, default))
+                                   for key, default in [('applicability_min_V', -10), ('applicability_max_V', 10)]})
     first,last=config['analysis_rows']
     mode=entries['vf_mode']
     if mode not in ('minimum','lowest_two'):
@@ -67,7 +67,8 @@ class ManualAnalysisApp:
         self.profile=tk.StringVar(value='')
         self.mode=tk.StringVar(value='retarding')
         self.vars={key:tk.StringVar() for key in ['vf_mode',
-                   'retarding_start','retarding_end','saturation_start','saturation_end']}
+                   'retarding_start','retarding_end','saturation_start','saturation_end',
+                   'applicability_min_V','applicability_max_V']}
         header=ttk.Frame(root,padding=(10,8));header.grid(row=0,column=0,sticky='ew')
         ttk.Label(header,text='解析するデータ').pack(side='left')
         self.selector=ttk.Combobox(header,textvariable=self.profile,values=[],state='readonly',width=45,
@@ -81,6 +82,13 @@ class ManualAnalysisApp:
         body.columnconfigure(1,weight=1);body.rowconfigure(0,weight=1)
         left=ttk.Frame(body,width=330);left.grid(row=0,column=0,sticky='nsw',padx=(0,10))
         settings=ttk.LabelFrame(left,text='手動で指定する値',padding=8);settings.pack(fill='x')
+        bounds=ttk.LabelFrame(left,text='適用範囲：Vin＋Vout [V]（境界は含めない）',padding=6)
+        bounds.pack(fill='x',pady=5)
+        ttk.Label(bounds,text='下限').grid(row=0,column=0)
+        self.entry(bounds,'applicability_min_V',0,1)
+        ttk.Label(bounds,text='上限').grid(row=0,column=2)
+        self.entry(bounds,'applicability_max_V',0,3)
+        ttk.Button(bounds,text='適用範囲を更新',command=self.refresh).grid(row=1,column=0,columnspan=4,sticky='ew')
         ttk.Label(settings,text='Vfの指定方法').grid(row=0,column=0,sticky='w')
         vf_options=ttk.Frame(settings);vf_options.grid(row=0,column=1,columnspan=2,sticky='w')
         self.vf_radio_buttons={}
@@ -95,7 +103,7 @@ class ManualAnalysisApp:
             ttk.Radiobutton(tools,text=label,variable=self.mode,value=value,command=self.mode_changed).grid(row=i,column=0,sticky='w',pady=2)
         buttons=ttk.Frame(left);buttons.pack(fill='x',pady=4)
         ttk.Button(buttons,text='指定値でプレビュー更新',command=self.refresh).pack(fill='x')
-        self.save_button=ttk.Button(buttons,text='設定を保存して解析結果を書き出す',command=self.save_and_export)
+        self.save_button=ttk.Button(buttons,text='設定・全結果CSV・全グラフを保存',command=self.save_and_export)
         self.save_button.pack(fill='x',pady=5)
         result_frame=ttk.LabelFrame(left,text='選択範囲の近似式・計算結果',padding=6);result_frame.pack(fill='both',expand=True,pady=4)
         self.result_text=tk.Text(result_frame,width=39,height=8,wrap='word',font=('Meiryo',9),state='disabled')
@@ -157,8 +165,8 @@ class ManualAnalysisApp:
                         self.rows,self.x,self.trace=read_trace(self.source,self.base,details=True)
                         self.log=self.trace[2]
                         self._trace_signature=signature;self.refresh()
-                except (OSError,ValueError,KeyError,TypeError,BadZipFile) as error:
-                    self.clear_data(f'選択中のExcelを読み込めません: {error}')
+                except (OSError,ValueError,KeyError,TypeError) as error:
+                    self.clear_data(f'選択中のCSVを読み込めません: {error}')
         elif choose_initial and profiles:
             self.load_profile(next(iter(profiles.values())))
         elif choose_initial and not profiles:
@@ -174,14 +182,14 @@ class ManualAnalysisApp:
         finally:
             if not self._closed:self._watch_id=self.root.after(1500,self.watch_data)
 
-    def clear_data(self,message='dataフォルダにLP測定の.xlsxまたは.csvを入れてください。自動で一覧へ追加します。'):
+    def clear_data(self,message='dataフォルダにLP測定の.csvを入れてください。自動で一覧へ追加します。'):
         self.has_trace=False;self.result=None;self.profile.set('')
         self.geometry_fits={};self.geometry_vp=None;self.geometry_error=''
         self.rows=np.array([],dtype=int);self.x=np.array([]);self.log=np.array([])
         self.source_label.configure(text='データ未選択')
         self.set_result_text('解析するデータを選択してください。')
         self.save_button.configure(state='disabled');self.status.set(message)
-        self.ax.clear();self.ax.set(title='Add an LP512 .xlsx file to data/')
+        self.ax.clear();self.ax.set(title='Add an LP512 .csv file to data/')
         self.span.set_active(False);self.canvas.draw_idle()
 
     def load_profile(self,path):
@@ -194,7 +202,7 @@ class ManualAnalysisApp:
             rows,x,trace=read_trace(source,base,details=True)
             log=trace[2]
             info=source.stat();signature=(info.st_size,info.st_mtime_ns)
-        except (OSError,ValueError,KeyError,TypeError,BadZipFile) as error:
+        except (OSError,ValueError,KeyError,TypeError) as error:
             self.loading=False
             if self.has_trace:
                 self.profile.set(next((name for name,p in self.profiles.items() if p==self.config_path),self.source.name))
@@ -205,7 +213,7 @@ class ManualAnalysisApp:
         self.rows,self.x,self.log=rows,x,log
         self.trace=trace
         self._trace_signature=signature;self.has_trace=True
-        self.source_label.configure(text=f"{self.source.name} / Excel {self.rows[0]}〜{self.rows[-1]}行")
+        self.source_label.configure(text=f"{self.source.name} / CSVデータ {self.rows[0]}〜{self.rows[-1]}行")
         label=next((name for name,p in self.profiles.items() if p==config_path),source.name)
         self.profiles[label]=config_path;self.profile.set(label)
         self.selector.configure(values=list(self.profiles))
@@ -213,6 +221,8 @@ class ManualAnalysisApp:
             pair=self.base.get(key+'_fit_rows') or ('','')
             for suffix,value in zip(('start','end'),pair):self.vars[key+'_'+suffix].set(str(value))
         self.vars['vf_mode'].set(self.base.get('floating_potential_mode','unselected'))
+        for key in ('applicability_min_V','applicability_max_V'):
+            self.vars[key].set(f'{self.base[key]:g}')
         self.loading=False;self.refresh()
         return True
 
@@ -254,6 +264,28 @@ class ManualAnalysisApp:
         if not self.has_trace:
             self.save_button.configure(state='disabled');return
         self.result=None
+        try:
+            bounds=applicability_bounds({key:self.vars[key].get().strip()
+                                         for key in ('applicability_min_V','applicability_max_V')})
+            if bounds != applicability_bounds(self.base):
+                config=self.base | dict(zip(('applicability_min_V','applicability_max_V'),bounds))
+                pair=select_applicable_rows(self.source,config)
+                config['analysis_rows']=pair
+                rows,x,trace=read_trace(self.source,config,details=True)
+                if pair != self.base['analysis_rows']:
+                    # 適用点が変わるとイオン直線・Vf・Vp0も変わるため、領域を選び直す。
+                    for key in REGION_KEYS:
+                        config[key+'_fit_rows']=None
+                        for suffix in ('start','end'):self.vars[key+'_'+suffix].set('')
+                    config['floating_potential_mode']='unselected'
+                    self.vars['vf_mode'].set('unselected')
+                self.base=config
+                self.rows,self.x,self.trace,self.log=rows,x,trace,trace.log_current
+                self.source_label.configure(text=f'{self.source.name} / CSVデータ {rows[0]}〜{rows[-1]}行')
+        except (ValueError,KeyError,TypeError) as error:
+            self.geometry_fits={};self.geometry_vp=None
+            self.set_result_text(f'適用範囲を更新できません: {error}')
+            self.save_button.configure(state='disabled');self.status.set(str(error));return
         self.update_geometry()
         self.set_result_text(self.geometry_text())
         self.save_button.configure(state='disabled')
@@ -271,14 +303,13 @@ class ManualAnalysisApp:
                 r2='n/a' if f.r_squared is None else f'{f.r_squared:.6f}'
                 text+=f'{label} {f.rows[0]}〜{f.rows[1]}行 ({f.points}点)\n'+('Ipol[A]' if key=='ion' else 'ln|Ie|')+f' = {f.slope:.6g}V {f.intercept:+.6g}\nR² = {r2}\n\n'
             self.set_result_text(text)
-            self.status.set('プレビュー更新。保存ボタンを押すと、現在の指定値とExcel・CSV・グラフを書き出します。')
+            self.status.set('プレビュー更新。保存ボタンを押すと、現在の指定値とCSV・グラフを書き出します。')
             self.save_button.configure(state='normal')
         except (ValueError,KeyError,TypeError,OverflowError) as error:
             text=self.geometry_text()+'Vfなどの指定が完了すると、電子温度・電子密度を表示します。'
-            if self.base.get('analysis_protocol')=='lp24':
-                text+=f'\nVp0 = {self.x[self.trace[5]]:.6f} V\n'
-                fit=self.trace[4]
-                text+=f'イオン近似 ({fit.points}点):\nIpol[A] = {fit.slope:.6g}V {fit.intercept:+.6g}\n'
+            text+=f'\nVp0 = {self.x[self.trace.peak_index]:.6f} V\n'
+            fit=self.trace.ion_fit
+            text+=f'イオン近似 ({fit.points}点):\nIpol[A] = {fit.slope:.6g}V {fit.intercept:+.6g}\n'
             self.set_result_text(text)
             self.status.set(str(error));self.save_button.configure(state='disabled')
         self.draw()
@@ -286,7 +317,7 @@ class ManualAnalysisApp:
     def draw(self):
         self.ax.clear()
         visible=(self.x>0)&np.isfinite(self.log)
-        self.ax.plot(self.x[visible],self.log[visible],'o',linestyle='None',ms=5,color='#526170',label='ln(abs(Ie)), Vout > 0')
+        self.ax.plot(self.x[visible],self.log[visible],'o',linestyle='None',ms=5,color='#526170',label='ln(|Ie| / 1 A), Vout > 0')
         if 'vp' in self.geometry_fits:
             fit=self.geometry_fits['vp'];mask=(self.rows>=fit.rows[0])&(self.rows<=fit.rows[1])&visible
             self.ax.scatter(self.x[mask],self.log[mask],s=55,color=COLORS['vp'],label='Vp neighbor points',zorder=5)
@@ -327,9 +358,9 @@ class ManualAnalysisApp:
                     self.ax.scatter(self.x[indices],self.log[indices],color='#8a348a',s=65,zorder=6,label='Vf selected points')
                     if math.isfinite(v):self.ax.axvline(v,color='#8a348a',ls=':',label=f'Vf = {v:.6f} V')
             except (ValueError,IndexError):pass
-        if self.base.get('analysis_protocol')=='lp24' and self.x[self.trace[5]]>0:
+        if self.x[self.trace.peak_index]>0:
             self.ax.axvline(self.x[self.trace[5]],color='#b4473b',ls='-.',label=f'Vp0 = {self.x[self.trace[5]]:.6f} V')
-        self.ax.set(title='Manual selection: ln|Ie| vs Vout',xlabel='Vout (V)',ylabel='Ipol (A)')
+        self.ax.set(title='Manual selection: ln|Ie| vs Vout',xlabel='Vout (V)',ylabel='ln(|Ie| / 1 A)')
         self.ax.set_xlim(left=0)
         self.ax.grid(alpha=.2);self.ax.legend(fontsize=8,loc='best')
         self.span.disconnect_events()
@@ -354,16 +385,23 @@ class ManualAnalysisApp:
         self.refresh()
 
     def save_and_export(self):
-        self.refresh()
+        # 指定値が変わっていなければ再描画せず、表示中のズーム・範囲をそのまま保存する。
+        try:
+            changed=self.get_config()!=getattr(self,'preview_config',None)
+        except (ValueError,KeyError,TypeError):
+            changed=True
+        if self.result is None or changed:self.refresh()
         if self.result is None:return False
         config=copy.deepcopy(self.preview_config)
-        out=(self.config_path.parent/config['output_dir']).resolve()
+        out=output_directory(self.source,config,self.config_path)
         self.status.set('現在の手動指定で解析結果を書き出しています…');self.root.update_idletasks()
         try:
             export_analysis(self.source,config,out,self.result)
+            self.canvas.draw()
+            self.figure.savefig(out/'graphs'/'11_gui_view.png',dpi=160)
             save_config(self.config_path,config)
             self.base=config
-            self.status.set(f'保存完了: {out} （同じ指定を次回の起動時にも読み込みます）')
+            self.status.set(f'保存完了: {out} ／ 日本語の結果一覧: results_summary.csv ／ GUIグラフ: graphs/11_gui_view.png')
             return True
         except (OSError,ValueError) as error:
             self.status.set(f'書き出しに失敗: {error}')

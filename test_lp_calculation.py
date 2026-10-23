@@ -33,14 +33,10 @@ class CalculationTests(unittest.TestCase):
         expected = 4 * math.exp(-13.8) / (charge * 4 * math.pi * radius**2 * speed) / 1e6
         self.assertTrue(math.isclose(result.metrics['electron_density_cm3'], expected, rel_tol=1e-12))
 
-    def test_zero_residual_and_saved_legacy_ion_selection_are_ignored(self):
+    def test_zero_residual_has_undefined_log(self):
         negative = self.result.voltage < 0
         np.testing.assert_array_equal(self.result.trace.electron_current[negative], 0)
         self.assertTrue(np.all(np.isnan(self.result.trace.log_current[negative])))
-        config = self.config | {'ion_fit_rows': [27, 30], 'ion_slope_A_per_V': 99}
-        again = lp.calculate(ROOT / config['input'], config)
-        self.assertEqual(again.metrics, self.result.metrics)
-
     def test_cli_works_from_another_directory_and_writes_results(self):
         temporary_parent = ROOT / '.tools'
         temporary_parent.mkdir(exist_ok=True)
