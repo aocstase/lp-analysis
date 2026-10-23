@@ -1,0 +1,26 @@
+{
+  "format": 1,
+  "app_id": "lp512-analysis",
+  "version": "1.1.0",
+  "python_min": [
+    3,
+    10
+  ],
+  "files": {
+    "lp_calculation.py": "234c3feb4a4c570243810ff7951bb70c09e4f89a67b073d116954a29f421202a",
+    "manual_analysis.py": "6cb61b4fa1bc05b07a2659f917fdcb665eff40ce76dbdef00d520a7aecf11404",
+    "analyze.py": "4064a0fa9f0bd17bd340734d9791470c28706c89b0c0697a8932ea7d62e0f9d6",
+    "data_catalog.py": "3a5688da16ebeea846ef66ce23968943bbef81249ae711c76f82f34de7ff32fc",
+    "result_output.py": "7671734babc36af56a3b58fba842a40c355098d8fe9a4622e5660ef21f490074",
+    "run_calculation.py": "f93cd9c5a068f83e953dcdd7d138b43a06dd86748d08f9786ebcf7532e84388c",
+    "run_gui.py": "6ab193972abaa7247b65b28f23cd3c5b0029b71bcbfa1ac7c8b4bc17c4896018",
+    "run.cmd": "391e59db73895525eb6827e6d1cda6c93fdaaa488b376c44d7bd75bba6ff82a4",
+    "run_gui.cmd": "07f300e50fcaa27a28566052d4f48171ef48e95f6eca3d8e0748c51e7b0f1eca",
+    "update_app.py": "6b06ac698854222e2225c3ddaff97d1ed06e85c4640997c92514254aa10343b1",
+    "update.cmd": "49df6ca17b8da1f2df7c227bcb819e0628808e0d569e1b65bc7e905ecee59aaa",
+    "README.md": "0d1c208edf729afffe89c432fe21809d6a87248a677672bc2bfeaa99f355582a",
+    "requirements.txt": "3d20883116cd19db69a6bf3cdaa22e182f5857f7dae386f964d58ed68b479e53",
+    "requirements-gui.txt": "e6e2dfcb6ceb55a4f47bd7d7227393d63fbcbd4a9bbf0ffce22b7464186d9644",
+    ".gitignore": "dc2c132a9f55411292639a8db6ca3fecb7f56d723b31dc709566a97f266846ca"
+  }
+}

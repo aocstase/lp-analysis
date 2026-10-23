@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import csv
 from dataclasses import asdict, dataclass
+from functools import lru_cache
 import io
 import json
 import math
@@ -139,12 +140,11 @@ def load_config(path):
     return config
 
 
-def read_points(source, config, *, include_all=False, metadata=False, validate_selection=True):
-    """LP512のCSVを直接読む。空行を除いた最初のデータを1行目とする。"""
+@lru_cache(maxsize=4)
+def _read_csv_points(source, size, modified_ns, fallback):
+    """直近4ファイルだけをメモリに保持。サイズ・更新時刻・抵抗変更時は読み直す。"""
     source = Path(source)
     points = []
-
-    fallback = resistance_value(config.get('resistance_ohm'))
 
     def append(analysis_row, dac, vout, resistance=None, sweep=''):
         for value, label in ((dac, 'DAC_A_nominal_V'), (vout, 'Vout_A_nominal_V')):
@@ -198,6 +198,23 @@ def read_points(source, config, *, include_all=False, metadata=False, validate_s
     # 配列化は一度だけ行う。先頭3列が解析行・Vout・Ipol、後ろ2列が抵抗・掃引名。
     arrays = tuple(np.array([point[i] for point in points], dtype=dtype)
                    for i, dtype in enumerate((int, float, float, float, str)))
+    # キャッシュした元配列を書き換えて、次の計算に混入させない。
+    for array in arrays:
+        array.setflags(write=False)
+    return arrays
+
+
+def clear_measurement_cache():
+    """GUIを閉じるときに測定データのメモリを解放する。ディスクには保存しない。"""
+    _read_csv_points.cache_clear()
+
+
+def read_points(source, config, *, include_all=False, metadata=False, validate_selection=True):
+    """CSV読込結果を再利用し、解析行・適用範囲は呼び出しごとに検証する。"""
+    source = Path(source).resolve()
+    info = source.stat()
+    arrays = _read_csv_points(str(source), info.st_size, info.st_mtime_ns,
+                              resistance_value(config.get('resistance_ohm')))
     if not validate_selection:
         return arrays if metadata else arrays[:3]
     pair = config.get('analysis_rows')
@@ -499,14 +516,19 @@ def read_trace(source, config, *, details=False):
 
 
 def output_directory(source, config, config_path, *, root=None):
-    """データ固有の出力先。保存済みの指定があればGUIとターミナルで共有する。"""
+    """data内の階層をoutputsにも再現し、CSV名ごとに結果を分ける。"""
+    root = Path(root or ROOT).resolve()
+    source = Path(source).resolve()
+    if source.is_relative_to(root / 'data'):
+        relative = source.relative_to(root / 'data')
+        return root / 'outputs' / relative.parent / relative.stem
     if config_path is None:
-        return Path(root or ROOT).resolve() / 'outputs' / Path(source).stem
+        return root / 'outputs' / source.stem
     path = Path(config_path).resolve()
     if config.get('output_dir'):
         return (path.parent / config['output_dir']).resolve()
     name = path.stem if path.parent.name == 'profiles' else Path(source).stem
-    return Path(root or ROOT).resolve() / 'outputs' / name
+    return root / 'outputs' / name
 
 
 def export_arrays(result):
@@ -700,6 +722,57 @@ def draw_ion_fit(ax, voltage, current, fit):
     ax.axvline(0, color='gray', lw=.8, ls=':')
 
 
+PREPROCESSING_STAGES = (
+    ('01_raw_iv', 'Raw I-V'), ('02_applicable_iv', 'Applicable I-V'),
+    ('03_ion_fit', 'Ion fit from negative voltage'),
+    ('04_corrected_current', 'Ion-subtracted current'),
+    ('05_log_current', 'Log current and Vf'), ('06_derivative', 'Adjacent difference and Vp0'),
+)
+
+
+def draw_preprocessing_stage(ax, index, voltage, current, trace, raw_points,
+                             resistance, bounds, vf=None):
+    """グラフ1〜6の描画をGUIとPNG保存で共用。Vf・2領域が未設定でも表示できる。"""
+    _, raw_x, raw_y = raw_points
+    x = np.asarray(voltage)
+    def points(xx, yy, **kwargs):
+        xx, yy = np.asarray(xx), np.asarray(yy)
+        valid = (xx > 0) & np.isfinite(xx) & np.isfinite(yy)
+        ax.plot(xx[valid], yy[valid], 'o', linestyle='None', ms=3, **kwargs)
+
+    if index in (0, 1):
+        mask = raw_x > 0
+        if index == 1:
+            total = raw_y * resistance + raw_x
+            mask &= (bounds[0] < total) & (total < bounds[1])
+        points(raw_x[mask], raw_y[mask], color='#526170', label='Ipol')
+    elif index == 2:
+        draw_ion_fit(ax, x, current, trace.ion_fit)
+    elif index == 3:
+        points(x, trace.electron_current, color='#526170', label='Ie')
+        ax.axhline(0, color='gray', lw=.7)
+    elif index == 4:
+        points(x, trace.log_current, color='#526170', label='ln(|Ie| / 1 A)')
+        if vf is not None:
+            ax.axvline(vf, color='#943a94', ls=':', label=f'Vf={vf:.6g} V')
+    elif index == 5:
+        eligible = vp0_interval_mask(x)
+        points(x[eligible], trace.derivative[eligible], color='#526170',
+               label='abs(delta Ie/delta V), both Vout > 0')
+        peak = x[trace.peak_index]
+        if peak > 0:
+            ax.axvline(peak, color='gray', ls='--', label=f'Vp0={peak:.6g} V')
+    else:
+        raise ValueError('グラフ番号は1〜6です。')
+    ylabel = ('ln(|Ie| / 1 A)' if index == 4
+              else 'abs(delta Ie/delta V) (A/V)' if index == 5 else 'Ipol (A)')
+    ax.set(title=PREPROCESSING_STAGES[index][1], xlabel='Vout (V)', ylabel=ylabel)
+    if index != 2:
+        ax.set_xlim(left=0)
+    ax.grid(alpha=.2)
+    ax.legend(fontsize=8)
+
+
 def plot_stages(out, result):
     """全解析段階を個別PNGと一覧図に保存する。画面・Tkは起動しない。"""
     from matplotlib.figure import Figure
@@ -714,11 +787,7 @@ def plot_stages(out, result):
     x, log = result.voltage[visible], trace.log_current[visible]
     rows = result.rows[visible]
     vp = result.metrics['plasma_potential_V']
-    stages = [
-        ('01_raw_iv', 'Raw I-V'), ('02_applicable_iv', 'Applicable I-V'),
-        ('03_ion_fit', 'Ion fit from negative voltage'),
-        ('04_corrected_current', 'Ion-subtracted current'),
-        ('05_log_current', 'Log current and Vf'), ('06_derivative', 'Adjacent difference and Vp0'),
+    stages = [*PREPROCESSING_STAGES,
         ('07_retarding_fit', 'Electron retarding fit'), ('08_saturation_fit', 'Electron saturation fit'),
         ('09_vp_intersection', 'Intersection of retarding and saturation fits'),
         ('10_vp_neighbors', 'Local fit around Vp and Ies'),
@@ -743,28 +812,13 @@ def plot_stages(out, result):
                 label=f'{key}: y={fit.slope:.6g}x {fit.intercept:+.6g}')
 
     def draw(ax, index):
-        if index in (0, 1):
-            mask = raw_x > 0
-            if index == 1:
-                total = raw_y * resistance + raw_x
-                mask &= (lower < total) & (total < upper)
-            points(ax, raw_x[mask], raw_y[mask], color='#526170', label='Ipol')
-        elif index == 2:
-            draw_ion_fit(ax, result.voltage, result.current, result.fits['ion'])
-        elif index == 3:
-            points(ax, x, trace.electron_current[visible], color='#526170', label='Ie')
-            ax.axhline(0, color='gray', lw=.7)
-        elif index == 5:
-            eligible = vp0_interval_mask(result.voltage)[visible]
-            points(ax, x[eligible], trace.derivative[visible][eligible], color='#526170', label='abs(delta Ie/delta V), both Vout > 0')
-            peak = result.metrics['derivative_peak_voltage_V']
-            if peak > 0:
-                ax.axvline(peak, color='gray', ls='--', label=f'Vp0={peak:.6g} V')
+        if index < 6:
+            draw_preprocessing_stage(ax, index, result.voltage, result.current, trace,
+                                     (raw_rows, raw_x, raw_y), resistance, (lower, upper),
+                                     result.metrics['floating_potential_V'])
+            return
         else:
             points(ax, x, log, color='#526170', label='ln(|Ie| / 1 A)')
-            if index == 4:
-                vf = result.metrics['floating_potential_V']
-                ax.axvline(vf, color='#943a94', ls=':', label=f'Vf={vf:.6g} V')
             for key in {6: ('retarding',), 7: ('saturation',),
                         8: ('retarding', 'saturation'), 9: ('vp',)}.get(index, ()):
                 fit_line_on(ax, key, extend=index == 8)
